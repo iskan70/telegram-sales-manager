@@ -16,11 +16,11 @@ import os
 TOKEN = "8405594915:AAG7xBp4bUsxZLd9_oBwuukL0Z2ZB2IZpH4"
 ADMIN_ID = 494255577
 
-# Grok API ключ берётся из переменной окружения (безопасно)
-GROK_API_KEY = os.getenv("GROK_API_KEY")
+# OpenAI ключ из переменной окружения (безопасно)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not GROK_API_KEY:
-    logging.error("GROK_API_KEY не найден в переменных окружения!")
+if not OPENAI_API_KEY:
+    logging.error("OPENAI_API_KEY не найден!")
     exit(1)
 
 defaults = DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -41,21 +41,21 @@ main_kb = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="Оставить заявку 📝")]
 ], resize_keyboard=True)
 
-# Обучаемый system prompt — меняй здесь для "обучения" бота
+# System prompt — "обучение" бота
 system_prompt = """
 Ты — опытный менеджер по продажам компании по логистике из Китая в Россию.
 Компания занимается перевозками грузов (море, авиа, ж/д, авто), выкупом товаров на 1688, Taobao, Poizon и поиском поставщиков.
 
 Отвечай как живой человек: дружелюбно, профессионально, используй эмодзи, задавай уточняющие вопросы.
-Никогда не говори, что ты бот. Подстраивайся под клиента, веди диалог естественно.
-Если клиент готов к заявке — плавно собери данные: имя, телефон, услугу, детали.
+Никогда не говори, что ты бот. Веди диалог естественно.
+Если клиент готов к заявке — плавно собери данные.
 """
 
 def get_ai_response(user_message, history=""):
-    url = "https://api.x.ai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     data = {
-        "model": "grok-beta",
+        "model": "gpt-4o-mini",  # Самая живая и умная модель для русских ответов
         "messages": [
             {"role": "system", "content": system_prompt + history},
             {"role": "user", "content": user_message}
@@ -68,8 +68,8 @@ def get_ai_response(user_message, history=""):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        logging.error(f"Ошибка Grok API: {e}")
-        return "Извините, сейчас небольшая задержка. Расскажите подробнее — помогу с расчётом! 😊"
+        logging.error(f"Ошибка OpenAI API: {e}")
+        return "Извините, сейчас небольшая задержка. Расскажите подробнее — помогу! 😊"
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
@@ -102,7 +102,7 @@ async def get_phone(message: types.Message, state: FSMContext):
 async def get_service(message: types.Message, state: FSMContext):
     await state.update_data(service=message.text.strip())
     await state.set_state(LeadForm.details)
-    await message.answer("Опишите детали заказа (товар, объём, маршрут, бюджет и т.д.):")
+    await message.answer("Опишите детали заказа (товар, объём, маршрут, бюджет):")
 
 @dp.message(LeadForm.details)
 async def get_details(message: types.Message, state: FSMContext):
@@ -110,7 +110,7 @@ async def get_details(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
 
-    await message.answer("✅ Спасибо! Заявка принята. Скоро свяжусь с точным расчётом!", reply_markup=main_kb)
+    await message.answer("✅ Спасибо! Заявка принята. Скоро свяжусь с расчётом!", reply_markup=main_kb)
 
     admin_text = (
         f"<b>Новая заявка от бота-менеджера!</b>\n\n"
@@ -118,11 +118,11 @@ async def get_details(message: types.Message, state: FSMContext):
         f"Контакт: {data['phone']}\n"
         f"Услуга: {data['service']}\n"
         f"Детали: {data['details']}\n\n"
-        f"Пользователь: {message.from_user.full_name} (@{message.from_user.username or 'нет'}) ID: {message.from_user.id}"
+        f"Пользователь: {message.from_user.full_name} (@{message.from_user.username or 'нет'})"
     )
     await bot.send_message(ADMIN_ID, admin_text)
 
-# Любое другое сообщение — живой ответ от Grok
+# Любое другое сообщение — живой ответ от GPT-4o-mini
 @dp.message()
 async def free_chat(message: types.Message):
     response = get_ai_response(message.text)
