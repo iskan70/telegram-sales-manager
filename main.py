@@ -15,10 +15,11 @@ import os
 TOKEN = "8405594915:AAG7xBp4bUsxZLd9_oBwuukL0Z2ZB2IZpH4"
 ADMIN_ID = 494255577
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Новый имя переменной в Render
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
 
 if not OPENAI_API_KEY:
-    logging.error("OPENAI_API_KEY не найден!")
+    logging.error("OPENAI_API_KEY_1 не найден!")
     exit(1)
 
 defaults = DefaultBotProperties(parse_mode=ParseMode.HTML)
