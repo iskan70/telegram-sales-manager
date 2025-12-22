@@ -12,15 +12,13 @@ import logging
 import requests
 import os
 
-# Токен бота
 TOKEN = "8405594915:AAG7xBp4bUsxZLd9_oBwuukL0Z2ZB2IZpH4"
 ADMIN_ID = 494255577
 
-# Grok API ключ из переменной окружения (безопасно)
-GROK_API_KEY = os.getenv("GROK_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not GROK_API_KEY:
-    logging.error("GROK_API_KEY не найден!")
+if not OPENAI_API_KEY:
+    logging.error("OPENAI_API_KEY не найден!")
     exit(1)
 
 defaults = DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -41,24 +39,23 @@ main_kb = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="Оставить заявку 📝")]
 ], resize_keyboard=True)
 
-# System prompt — "обучение" бота (меняй здесь для изменений поведения)
 system_prompt = """
 Ты — опытный менеджер по продажам компании по логистике из Китая в Россию.
 Компания занимается перевозками грузов (море, авиа, ж/д, авто), выкупом товаров на 1688, Taobao, Poizon и поиском поставщиков.
 
-Отвечай как живой человек: дружелюбно, профессионально, используй эмодзи, задавай уточняющие вопросы, подстраивайся под клиента.
+Отвечай как живой человек: дружелюбно, профессионально, используй эмодзи, задавай уточняющие вопросы.
 Никогда не говори, что ты бот. Веди диалог естественно.
-Если клиент готов — собери имя, телефон, услугу и детали заказа.
+Если клиент готов — собери имя, телефон, услугу и детали.
 """
 
 def get_ai_response(user_message, history=""):
-    url = "https://api.x.ai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROK_API_KEY}"}
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     data = {
-        "model": "grok-beta",
+        "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": system_prompt + history},
-            {"role": "user", "content": user_message}
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": history + user_message}
         ],
         "temperature": 0.8,
         "max_tokens": 600
@@ -68,7 +65,7 @@ def get_ai_response(user_message, history=""):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        logging.error(f"Ошибка Grok API: {e}")
+        logging.error(f"Ошибка OpenAI API: {e}")
         return "Извините, сейчас небольшая задержка. Расскажите подробнее — помогу с расчётом! 😊"
 
 @dp.message(Command("start"))
@@ -84,13 +81,13 @@ async def services(message: types.Message):
 @dp.message(F.text == "Оставить заявку 📝")
 async def start_form(message: types.Message, state: FSMContext):
     await state.set_state(LeadForm.name)
-    await message.answer("Как к вам обращаться? (введите имя)", reply_markup=ReplyKeyboardRemove())
+    await message.answer("Как к вам обращаться?", reply_markup=ReplyKeyboardRemove())
 
 @dp.message(LeadForm.name)
 async def get_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text.strip())
     await state.set_state(LeadForm.phone)
-    await message.answer("Ваш телефон или Telegram для связи:")
+    await message.answer("Ваш телефон для связи:")
 
 @dp.message(LeadForm.phone)
 async def get_phone(message: types.Message, state: FSMContext):
@@ -122,7 +119,6 @@ async def get_details(message: types.Message, state: FSMContext):
     )
     await bot.send_message(ADMIN_ID, admin_text)
 
-# Любое другое сообщение — живой ответ от Grok
 @dp.message()
 async def free_chat(message: types.Message):
     response = get_ai_response(message.text)
