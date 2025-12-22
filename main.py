@@ -12,7 +12,7 @@ import logging
 import requests
 import os
 
-TOKEN = "8405594915:AAG7xBp4bUsxZLd9_oBwuukL0Z2ZB2IZpH4"
+TOKEN = "8405594915:AAH86zSfvyPO0u-FAmRnCKhAue4hi9ex4vk"
 ADMIN_ID = 494255577
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
