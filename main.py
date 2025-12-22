@@ -15,7 +15,6 @@ import os
 TOKEN = "8405594915:AAG7xBp4bUsxZLd9_oBwuukL0Z2ZB2IZpH4"
 ADMIN_ID = 494255577
 
-# Новый имя переменной в Render
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY_1")
 
 if not OPENAI_API_KEY:
@@ -40,43 +39,63 @@ main_kb = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="Оставить заявку 📝")]
 ], resize_keyboard=True)
 
+# Обновлённый system prompt — авто-перевозки на первом месте
 system_prompt = """
 Ты — опытный менеджер по продажам компании по логистике из Китая в Россию.
-Компания занимается перевозками грузов (море, авиа, ж/д, авто), выкупом товаров на 1688, Taobao, Poizon и поиском поставщиков.
+Самый востребованный вариант сейчас — автомобильные грузовые перевозки (быстро, гибко, выгодная цена).
+
+Компания занимается:
+- Автомобильными грузовыми перевозками (основной и самый популярный способ)
+- Морскими, авиа и ж/д перевозками
+- Выкупом товаров на 1688, Taobao, Poizon
+- Поиском и проверкой поставщиков
 
 Отвечай как живой человек: дружелюбно, профессионально, используй эмодзи, задавай уточняющие вопросы.
 Никогда не говори, что ты бот. Веди диалог естественно.
-Если клиент готов — собери имя, телефон, услугу и детали.
+Если клиент интересуется перевозкой — в первую очередь предлагай автомобильный транспорт как самый востребованный.
+Помни весь предыдущий контекст разговора.
 """
 
-def get_ai_response(user_message, history=""):
+# Хранение истории диалога по user_id
+conversation_history = {}
+
+def get_ai_response(user_id, user_message):
+    if user_id not in conversation_history:
+        conversation_history[user_id] = [{"role": "system", "content": system_prompt}]
+
+    conversation_history[user_id].append({"role": "user", "content": user_message})
+
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     data = {
         "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": history + user_message}
-        ],
+        "messages": conversation_history[user_id],
         "temperature": 0.8,
         "max_tokens": 600
     }
     try:
         response = requests.post(url, json=data, headers=headers, timeout=30)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        assistant_message = response.json()["choices"][0]["message"]["content"]
+
+        conversation_history[user_id].append({"role": "assistant", "content": assistant_message})
+
+        if len(conversation_history[user_id]) > 20:
+            conversation_history[user_id] = [conversation_history[user_id][0]] + conversation_history[user_id][-19:]
+
+        return assistant_message
     except Exception as e:
         logging.error(f"Ошибка OpenAI API: {e}")
         return "Извините, сейчас небольшая задержка. Расскажите подробнее — помогу с расчётом! 😊"
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
-    text = get_ai_response("Приветствие для нового клиента")
+    text = get_ai_response(message.from_user.id, "Приветствие для нового клиента")
     await message.answer(text, reply_markup=main_kb)
 
 @dp.message(F.text == "Узнать об услугах 🚚")
 async def services(message: types.Message):
-    text = get_ai_response("Расскажи об услугах компании подробно")
+    text = get_ai_response(message.from_user.id, "Расскажи об услугах компании подробно, особенно про автомобильные грузовые перевозки как самый востребованный вариант")
     await message.answer(text, reply_markup=main_kb)
 
 @dp.message(F.text == "Оставить заявку 📝")
@@ -122,7 +141,7 @@ async def get_details(message: types.Message, state: FSMContext):
 
 @dp.message()
 async def free_chat(message: types.Message):
-    response = get_ai_response(message.text)
+    response = get_ai_response(message.from_user.id, message.text)
     await message.answer(response, reply_markup=main_kb)
 
 async def main():
